@@ -115,18 +115,26 @@ INSERT INTO appointment (
     return err
 }
 
-// LockTechnician obtains a row-level lock on technician's appointments span to avoid races
+// LockTechnician obtains a row-level lock on the technician row to avoid races
 func (r *BookingRepository) LockTechnician(ctx context.Context, tx *sqlx.Tx, technicianID string) error {
-    // Locking relevant appointment rows by selecting FOR UPDATE on appointment table where technician_id = X
-    query := `SELECT id FROM appointment WHERE technician_id = $1 FOR UPDATE` 
-    _, err := tx.QueryContext(ctx, query, technicianID)
+    // Lock the technician row itself (simpler and reliable)
+    query := `SELECT id FROM technician WHERE id = $1 FOR UPDATE`
+    var id string
+    err := tx.QueryRowContext(ctx, query, technicianID).Scan(&id)
+    if err == sql.ErrNoRows {
+        return nil // technician not found; let higher-level checks handle this
+    }
     return err
 }
 
 // LockServiceBay obtains a lock on service_bay row
 func (r *BookingRepository) LockServiceBay(ctx context.Context, tx *sqlx.Tx, serviceBayID string) error {
     query := `SELECT id FROM service_bay WHERE id = $1 FOR UPDATE`
-    _, err := tx.QueryContext(ctx, query, serviceBayID)
+    var id string
+    err := tx.QueryRowContext(ctx, query, serviceBayID).Scan(&id)
+    if err == sql.ErrNoRows {
+        return nil
+    }
     return err
 }
 
