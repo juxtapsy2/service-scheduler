@@ -8,6 +8,7 @@ type BookingRequest struct {
     VehicleID     string    `json:"vehicle_id" binding:"required,uuid"`
     DealershipID  string    `json:"dealership_id" binding:"required,uuid"`
     ServiceTypeID string    `json:"service_type_id" binding:"required,uuid"`
+    PreferredTechnicianID string `json:"preferred_technician_id" binding:"omitempty,uuid"`
     DesiredStart  time.Time `json:"desired_start" binding:"required"`
 }
 
@@ -25,6 +26,7 @@ type QuickBookingRequest struct {
 
     DealershipID   string    `json:"dealership_id" binding:"required,uuid"`
     ServiceType    string    `json:"service_type" binding:"required"` // name or id
+    PreferredTechnicianID string `json:"preferred_technician_id" binding:"omitempty,uuid"`
     DesiredStart   time.Time `json:"desired_start" binding:"required"`
 }
 

@@ -70,6 +70,7 @@ func (h *QuickBookingHandler) QuickBook(c *gin.Context) {
         VehicleID:     vehicleID,
         DealershipID:  req.DealershipID,
         ServiceTypeID: serviceTypeID,
+        PreferredTechnicianID: req.PreferredTechnicianID,
         DesiredStart:  req.DesiredStart,
     }
 

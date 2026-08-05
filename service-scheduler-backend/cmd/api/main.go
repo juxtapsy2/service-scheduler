@@ -24,6 +24,7 @@ func main() {
     svc := service.NewBookingService(repo)
     bookingHandler := handler.NewBookingHandler(svc)
     serviceTypesHandler := handler.NewServiceTypesHandler(repo)
+    techniciansHandler := handler.NewTechniciansHandler(repo)
 
     r := gin.Default()
 
@@ -43,6 +44,9 @@ func main() {
 
     bookingHandler.RegisterRoutes(r)
     serviceTypesHandler.RegisterRoutes(r)
+    techniciansHandler.RegisterRoutes(r)
+    dealershipsHandler := handler.NewDealershipsHandler(repo)
+    dealershipsHandler.RegisterRoutes(r)
     quickHandler := handler.NewQuickBookingHandler(repo, svc)
     quickHandler.RegisterRoutes(r)
 

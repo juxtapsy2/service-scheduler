@@ -34,6 +34,11 @@ WHERE t.dealership_id = $1
 
 // TechnicianWorkingPeriod checks if technician has working schedule covering the interval (uses day_of_week/time)
 func (r *BookingRepository) TechnicianHasWorkingPeriod(ctx context.Context, technicianID string, start, end time.Time) (bool, error) {
+    // Interpret start/end in server local time when comparing to schedule TIMES stored without timezone.
+    // This makes the schedule check resilient to client UTC conversion from datetime-local inputs.
+    localStart := start.In(time.Local)
+    localEnd := end.In(time.Local)
+
     // Check each day segment; for simplicity assume appointment is within single day
     query := `
 SELECT 1 FROM technician_schedule s
@@ -44,10 +49,12 @@ WHERE s.technician_id = $1
   AND s.end_time >= $4::time
 LIMIT 1
 `
-    dow := int(start.Weekday())
-    if dow == 0 { dow = 7 } // Go: Sunday=0, DB expects 7
+    dow := int(localStart.Weekday())
+    if dow == 0 {
+        dow = 7 // Go: Sunday=0, DB expects 7
+    }
     var dummy int
-    err := r.db.GetContext(ctx, &dummy, query, technicianID, dow, start.Format("15:04:05"), end.Format("15:04:05"))
+    err := r.db.GetContext(ctx, &dummy, query, technicianID, dow, localStart.Format("15:04:05"), localEnd.Format("15:04:05"))
     if err == sql.ErrNoRows {
         return false, nil
     }
@@ -164,6 +171,52 @@ func (r *BookingRepository) GetServiceTypes(ctx context.Context) ([]map[string]i
             return nil, err
         }
         // normalize byte slices
+        for k, v := range m {
+            if b, ok := v.([]byte); ok {
+                m[k] = string(b)
+            }
+        }
+        out = append(out, m)
+    }
+    return out, nil
+}
+
+// GetDealerships returns id and name for all dealerships
+func (r *BookingRepository) GetDealerships(ctx context.Context) ([]map[string]interface{}, error) {
+    var out []map[string]interface{}
+    rows, err := r.db.QueryxContext(ctx, "SELECT id, name FROM dealership ORDER BY name")
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+    for rows.Next() {
+        m := map[string]interface{}{}
+        if err := rows.MapScan(m); err != nil {
+            return nil, err
+        }
+        for k, v := range m {
+            if b, ok := v.([]byte); ok {
+                m[k] = string(b)
+            }
+        }
+        out = append(out, m)
+    }
+    return out, nil
+}
+
+// GetTechniciansByDealership returns list of technicians (id, first_name, last_name) for a dealership
+func (r *BookingRepository) GetTechniciansByDealership(ctx context.Context, dealershipID string) ([]map[string]interface{}, error) {
+    var out []map[string]interface{}
+    rows, err := r.db.QueryxContext(ctx, "SELECT id, first_name, last_name FROM technician WHERE dealership_id = $1 AND active = true ORDER BY last_name, first_name", dealershipID)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+    for rows.Next() {
+        m := map[string]interface{}{}
+        if err := rows.MapScan(m); err != nil {
+            return nil, err
+        }
         for k, v := range m {
             if b, ok := v.([]byte); ok {
                 m[k] = string(b)

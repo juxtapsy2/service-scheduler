@@ -27,6 +27,7 @@ export type QuickBookingRequest = {
   vehicle_model: string
   vehicle_year: number
   dealership_id: string
+  preferred_technician_id?: string
   service_type: string
   desired_start: string
 }

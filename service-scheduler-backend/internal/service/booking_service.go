@@ -43,18 +43,18 @@ func (s *BookingService) Book(ctx context.Context, req *models.BookingRequest) (
         return "", ErrNoTechnician
     }
 
-    // naive loop: try each technician and attempt transactional booking with locks
-    for _, tech := range techs {
+    // helper to attempt booking for a single technician
+    tryTech := func(tech string) (string, error) {
         tx, err := s.repo.BeginTx(ctx)
         if err != nil {
             return "", err
         }
 
-        // lock technician and bays
+        // lock technician
         if err := s.repo.LockTechnician(ctx, tx, tech); err != nil {
             tx.Rollback()
             logrus.WithError(err).Error("lock technician failed")
-            continue
+            return "", err
         }
 
         // re-check overlapping appointments within transaction
@@ -62,11 +62,11 @@ func (s *BookingService) Book(ctx context.Context, req *models.BookingRequest) (
         if err != nil {
             tx.Rollback()
             logrus.WithError(err).Error("checking technician overlap failed")
-            continue
+            return "", err
         }
         if hasOverlap {
             tx.Rollback()
-            continue
+            return "", nil
         }
 
         // check working period (outside tx is acceptable)
@@ -74,11 +74,11 @@ func (s *BookingService) Book(ctx context.Context, req *models.BookingRequest) (
         if err != nil {
             tx.Rollback()
             logrus.WithError(err).Error("checking working period failed")
-            continue
+            return "", err
         }
         if !ok {
             tx.Rollback()
-            continue
+            return "", nil
         }
 
         // find available bay (we'll lock bay row after selection)
@@ -86,23 +86,21 @@ func (s *BookingService) Book(ctx context.Context, req *models.BookingRequest) (
         if err != nil {
             tx.Rollback()
             logrus.WithError(err).Error("finding bay failed")
-            continue
+            return "", err
         }
         if bayID == "" {
             tx.Rollback()
-            // no bay available for this technician/time; try next technician
-            continue
+            // no bay available for this technician/time
+            return "", nil
         }
 
         if err := s.repo.LockServiceBay(ctx, tx, bayID); err != nil {
             tx.Rollback()
             logrus.WithError(err).Error("lock bay failed")
-            continue
+            return "", err
         }
 
         // double-check bay still free within tx
-        // (since FindAvailableServiceBay used snapshot outside locks)
-        // check overlapping appointments for bay
         var overlap int
         err = tx.GetContext(ctx, &overlap, `SELECT 1 FROM appointment a WHERE a.service_bay_id = $1 AND a.start_time < $3 AND a.end_time > $2 LIMIT 1`, bayID, req.DesiredStart, end)
         if err != nil {
@@ -111,12 +109,12 @@ func (s *BookingService) Book(ctx context.Context, req *models.BookingRequest) (
             } else {
                 tx.Rollback()
                 logrus.WithError(err).Error("checking bay overlap failed")
-                continue
+                return "", err
             }
         } else {
             // row exists -> overlap
             tx.Rollback()
-            continue
+            return "", nil
         }
 
         // Create appointment
@@ -125,16 +123,45 @@ func (s *BookingService) Book(ctx context.Context, req *models.BookingRequest) (
         if err != nil {
             tx.Rollback()
             logrus.WithError(err).Error("create appointment failed")
-            continue
+            return "", err
         }
 
         if err := tx.Commit(); err != nil {
             tx.Rollback()
             logrus.WithError(err).Error("commit failed")
-            continue
+            return "", err
         }
 
         return apptID, nil
+    }
+
+    // If client requested a particular technician try that first (if qualified)
+    if req.PreferredTechnicianID != "" {
+        // check requested technician is in the qualified list
+        for _, t := range techs {
+            if t == req.PreferredTechnicianID {
+                id, err := tryTech(req.PreferredTechnicianID)
+                if err != nil {
+                    return "", err
+                }
+                if id != "" {
+                    return id, nil
+                }
+                // requested tech not available; fall back to others
+                break
+            }
+        }
+    }
+
+    // naive loop: try each technician and attempt transactional booking with locks
+    for _, tech := range techs {
+        id, err := tryTech(tech)
+        if err != nil {
+            return "", err
+        }
+        if id != "" {
+            return id, nil
+        }
     }
 
     return "", ErrNoTechnician
