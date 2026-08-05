@@ -4,6 +4,7 @@ import type { ServiceType } from './api/serviceTypes'
 import { listTechnicians } from './api/technicians'
 import { listDealerships } from './api/dealerships'
 import { createQuickBooking } from './api/bookings'
+import { localDatetimeToOffsetString } from './utils'
 
 import type { FieldDef } from './types'
 import { OptionsKey } from './types'
@@ -115,9 +116,9 @@ export default function QuickBookingForm({ fields }: Props) {
     setResult(null)
     setLoading(true)
     try {
-      // convert datetime-local to ISO before sending
+      // convert datetime-local to timestamp with local offset so backend receives user's local hour
       const desired = form.desired_start
-      const desiredISO = desired ? new Date(desired).toISOString() : ''
+      const desiredISO = desired ? localDatetimeToOffsetString(desired) : ''
 
       const payload = {
         ...form,

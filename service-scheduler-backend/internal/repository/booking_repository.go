@@ -6,6 +6,9 @@ import (
     "time"
 
     "github.com/jmoiron/sqlx"
+    "github.com/sirupsen/logrus"
+
+    "juxtapsy2/service-scheduler-backend/internal/config"
 )
 
 // BookingRepository provides DB operations needed by booking service
@@ -36,8 +39,8 @@ WHERE t.dealership_id = $1
 func (r *BookingRepository) TechnicianHasWorkingPeriod(ctx context.Context, technicianID string, start, end time.Time) (bool, error) {
     // Interpret start/end in server local time when comparing to schedule TIMES stored without timezone.
     // This makes the schedule check resilient to client UTC conversion from datetime-local inputs.
-    localStart := start.In(time.Local)
-    localEnd := end.In(time.Local)
+    localStart := start
+    localEnd := end
 
     // Check each day segment; for simplicity assume appointment is within single day
     query := `
@@ -53,15 +56,34 @@ LIMIT 1
     if dow == 0 {
         dow = 7 // Go: Sunday=0, DB expects 7
     }
+    // debug log
+    logrus.WithFields(logrus.Fields{
+        "technician_id": technicianID,
+        "dow": dow,
+        "start_time": localStart.Format(time.RFC3339),
+        "end_time": localEnd.Format(time.RFC3339),
+    }).Debug("checking technician working period")
+
     var dummy int
     err := r.db.GetContext(ctx, &dummy, query, technicianID, dow, localStart.Format("15:04:05"), localEnd.Format("15:04:05"))
-    if err == sql.ErrNoRows {
-        return false, nil
+    if err == nil {
+        logrus.WithField("technician_id", technicianID).Debug("found explicit schedule row")
+        return true, nil
     }
-    if err != nil {
+    if err != sql.ErrNoRows {
         return false, err
     }
-    return true, nil
+
+    // No explicit schedule found for this technician on that day. Apply a simple default working window from config.
+    ls := localStart.Format("15:04:05")
+    le := localEnd.Format("15:04:05")
+    logrus.WithFields(logrus.Fields{"technician_id": technicianID, "ls": ls, "le": le, "default_start": config.DefaultWorkingStart, "default_end": config.DefaultWorkingEnd}).Debug("no explicit schedule, checking default window")
+    if ls >= config.DefaultWorkingStart && le <= config.DefaultWorkingEnd {
+        logrus.WithField("technician_id", technicianID).Debug("allowed by default working window")
+        return true, nil
+    }
+
+    return false, nil
 }
 
 // TechnicianHasOverlappingAppointments checks for overlapping appointments

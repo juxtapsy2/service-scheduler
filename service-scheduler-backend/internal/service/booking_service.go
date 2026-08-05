@@ -35,25 +35,38 @@ func (s *BookingService) Book(ctx context.Context, req *models.BookingRequest) (
     }
     end := req.DesiredStart.Add(time.Duration(durMin) * time.Minute)
 
+    logrus.WithFields(logrus.Fields{
+        "dealership_id": req.DealershipID,
+        "service_type_id": req.ServiceTypeID,
+        "desired_start": req.DesiredStart.Format(time.RFC3339),
+        "desired_end": end.Format(time.RFC3339),
+        "preferred_technician": req.PreferredTechnicianID,
+    }).Info("booking request received")
+
     techs, err := s.repo.FindQualifiedTechnicians(ctx, req.DealershipID, req.ServiceTypeID)
     if err != nil {
+        logrus.WithError(err).Error("failed to fetch qualified technicians")
         return "", err
     }
+    logrus.WithField("count", len(techs)).Debug("qualified technicians found")
     if len(techs) == 0 {
+        logrus.WithFields(logrus.Fields{"dealership": req.DealershipID, "service_type": req.ServiceTypeID}).Warn("no qualified technicians")
         return "", ErrNoTechnician
     }
 
     // helper to attempt booking for a single technician
     tryTech := func(tech string) (string, error) {
+        logrus.WithField("technician", tech).Debug("attempting technician")
         tx, err := s.repo.BeginTx(ctx)
         if err != nil {
+            logrus.WithError(err).Error("begin tx failed")
             return "", err
         }
 
         // lock technician
         if err := s.repo.LockTechnician(ctx, tx, tech); err != nil {
             tx.Rollback()
-            logrus.WithError(err).Error("lock technician failed")
+            logrus.WithError(err).WithField("technician", tech).Error("lock technician failed")
             return "", err
         }
 
@@ -61,11 +74,12 @@ func (s *BookingService) Book(ctx context.Context, req *models.BookingRequest) (
         hasOverlap, err := s.repo.TechnicianHasOverlappingAppointments(ctx, tech, req.DesiredStart, end)
         if err != nil {
             tx.Rollback()
-            logrus.WithError(err).Error("checking technician overlap failed")
+            logrus.WithError(err).WithField("technician", tech).Error("checking technician overlap failed")
             return "", err
         }
         if hasOverlap {
             tx.Rollback()
+            logrus.WithField("technician", tech).Info("technician has overlapping appointment")
             return "", nil
         }
 
@@ -73,11 +87,12 @@ func (s *BookingService) Book(ctx context.Context, req *models.BookingRequest) (
         ok, err := s.repo.TechnicianHasWorkingPeriod(ctx, tech, req.DesiredStart, end)
         if err != nil {
             tx.Rollback()
-            logrus.WithError(err).Error("checking working period failed")
+            logrus.WithError(err).WithField("technician", tech).Error("checking working period failed")
             return "", err
         }
         if !ok {
             tx.Rollback()
+            logrus.WithField("technician", tech).Info("technician not working during requested time")
             return "", nil
         }
 
@@ -90,13 +105,15 @@ func (s *BookingService) Book(ctx context.Context, req *models.BookingRequest) (
         }
         if bayID == "" {
             tx.Rollback()
+            logrus.WithField("technician", tech).Info("no available bay for requested time")
             // no bay available for this technician/time
             return "", nil
         }
+        logrus.WithFields(logrus.Fields{"technician": tech, "bay": bayID}).Debug("selected bay")
 
         if err := s.repo.LockServiceBay(ctx, tx, bayID); err != nil {
             tx.Rollback()
-            logrus.WithError(err).Error("lock bay failed")
+            logrus.WithError(err).WithField("bay", bayID).Error("lock bay failed")
             return "", err
         }
 
@@ -108,12 +125,13 @@ func (s *BookingService) Book(ctx context.Context, req *models.BookingRequest) (
                 // no overlap, good
             } else {
                 tx.Rollback()
-                logrus.WithError(err).Error("checking bay overlap failed")
+                logrus.WithError(err).WithField("bay", bayID).Error("checking bay overlap failed")
                 return "", err
             }
         } else {
             // row exists -> overlap
             tx.Rollback()
+            logrus.WithFields(logrus.Fields{"bay": bayID, "technician": tech}).Info("bay has overlapping appointment")
             return "", nil
         }
 
@@ -132,6 +150,7 @@ func (s *BookingService) Book(ctx context.Context, req *models.BookingRequest) (
             return "", err
         }
 
+        logrus.WithFields(logrus.Fields{"appointment_id": apptID, "technician": tech, "bay": bayID}).Info("appointment created")
         return apptID, nil
     }
 
@@ -140,6 +159,7 @@ func (s *BookingService) Book(ctx context.Context, req *models.BookingRequest) (
         // check requested technician is in the qualified list
         for _, t := range techs {
             if t == req.PreferredTechnicianID {
+                logrus.WithField("preferred_technician", req.PreferredTechnicianID).Info("trying preferred technician first")
                 id, err := tryTech(req.PreferredTechnicianID)
                 if err != nil {
                     return "", err
@@ -148,6 +168,7 @@ func (s *BookingService) Book(ctx context.Context, req *models.BookingRequest) (
                     return id, nil
                 }
                 // requested tech not available; fall back to others
+                logrus.WithField("preferred_technician", req.PreferredTechnicianID).Info("preferred technician not available, falling back")
                 break
             }
         }
@@ -164,5 +185,6 @@ func (s *BookingService) Book(ctx context.Context, req *models.BookingRequest) (
         }
     }
 
+    logrus.WithFields(logrus.Fields{"dealership": req.DealershipID, "service_type": req.ServiceTypeID}).Warn("no technician/bay available after attempts")
     return "", ErrNoTechnician
 }
