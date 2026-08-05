@@ -149,3 +149,57 @@ func (r *BookingRepository) GetServiceDuration(ctx context.Context, serviceTypeI
     err := r.db.GetContext(ctx, &d, "SELECT duration_minutes FROM service_type WHERE id = $1", serviceTypeID)
     return d, err
 }
+
+// GetServiceTypes returns all service types
+func (r *BookingRepository) GetServiceTypes(ctx context.Context) ([]map[string]interface{}, error) {
+    var out []map[string]interface{}
+    rows, err := r.db.QueryxContext(ctx, "SELECT id, name, duration_minutes FROM service_type ORDER BY name")
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+    for rows.Next() {
+        m := map[string]interface{}{}
+        if err := rows.MapScan(m); err != nil {
+            return nil, err
+        }
+        // normalize byte slices
+        for k, v := range m {
+            if b, ok := v.([]byte); ok {
+                m[k] = string(b)
+            }
+        }
+        out = append(out, m)
+    }
+    return out, nil
+}
+
+// GetOrCreateCustomerByEmail returns customer id for email, creating a new customer if not exists
+func (r *BookingRepository) GetOrCreateCustomerByEmail(ctx context.Context, email, firstName, lastName string) (string, error) {
+    var id string
+    err := r.db.GetContext(ctx, &id, "SELECT id FROM customer WHERE email = $1", email)
+    if err == nil {
+        return id, nil
+    }
+    if err != sql.ErrNoRows {
+        return "", err
+    }
+    query := `INSERT INTO customer (id, first_name, last_name, email) VALUES (uuid_generate_v4(), $1, $2, $3) RETURNING id`
+    err = r.db.GetContext(ctx, &id, query, firstName, lastName, email)
+    return id, err
+}
+
+// GetOrCreateVehicleByVIN returns vehicle id for vin, creating new vehicle if not exists. Requires customerID.
+func (r *BookingRepository) GetOrCreateVehicleByVIN(ctx context.Context, vin, makeStr, model string, year int, customerID string) (string, error) {
+    var id string
+    err := r.db.GetContext(ctx, &id, "SELECT id FROM vehicle WHERE vin = $1", vin)
+    if err == nil {
+        return id, nil
+    }
+    if err != sql.ErrNoRows {
+        return "", err
+    }
+    query := `INSERT INTO vehicle (id, customer_id, vin, make, model, year) VALUES (uuid_generate_v4(), $1, $2, $3, $4, $5) RETURNING id`
+    err = r.db.GetContext(ctx, &id, query, customerID, vin, makeStr, model, year)
+    return id, err
+}

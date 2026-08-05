@@ -18,7 +18,7 @@ Do not implement these unless the core booking workflow is complete.
 
 # Coding Guidelines
 
-When generating code:
+When generating code for backend services, follow these guidelines:
 
 1. Prefer simple maintainable solutions.
 2. Avoid premature abstraction.
@@ -30,6 +30,12 @@ When generating code:
 8. Keep handlers thin.
 9. Use meaningful names.
 10. Optimize for correctness over cleverness.
+
+When generating code for frontend services, follow these guidelines:
+1. Use React functional components with hooks.
+2. Use TypeScript for type safety.
+
+General guideline: Do not hardcode values; use constants or configuration.
 
 Before implementing new features:
 - Explain the design.

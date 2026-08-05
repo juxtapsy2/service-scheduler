@@ -2,7 +2,10 @@ package main
 
 import (
     "log"
+    "os"
+    "time"
 
+    "github.com/gin-contrib/cors"
     "github.com/gin-gonic/gin"
 
     "juxtapsy2/service-scheduler-backend/internal/database"
@@ -19,10 +22,29 @@ func main() {
 
     repo := repository.NewBookingRepository(db)
     svc := service.NewBookingService(repo)
-    h := handler.NewBookingHandler(svc)
+    bookingHandler := handler.NewBookingHandler(svc)
+    serviceTypesHandler := handler.NewServiceTypesHandler(repo)
 
     r := gin.Default()
-    h.RegisterRoutes(r)
+
+    // Configure CORS (allow frontend dev server by default)
+    frontendOrigin := os.Getenv("FRONTEND_ORIGIN")
+    if frontendOrigin == "" {
+        frontendOrigin = "http://localhost:5173"
+    }
+    r.Use(cors.New(cors.Config{
+        AllowOrigins:     []string{frontendOrigin},
+        AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+        AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+        ExposeHeaders:    []string{"Content-Length"},
+        AllowCredentials: true,
+        MaxAge:           12 * time.Hour,
+    }))
+
+    bookingHandler.RegisterRoutes(r)
+    serviceTypesHandler.RegisterRoutes(r)
+    quickHandler := handler.NewQuickBookingHandler(repo, svc)
+    quickHandler.RegisterRoutes(r)
 
     if err := r.Run(); err != nil {
         log.Fatalf("server error: %v", err)
