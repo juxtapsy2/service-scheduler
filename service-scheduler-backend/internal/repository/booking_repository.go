@@ -74,7 +74,19 @@ LIMIT 1
         return false, err
     }
 
-    // No explicit schedule found for this technician on that day. Apply a simple default working window from config.
+    // No WORKING schedule covers the requested interval. Check if the technician has any schedule rows for that day.
+    var any int
+    err2 := r.db.GetContext(ctx, &any, "SELECT 1 FROM technician_schedule WHERE technician_id = $1 AND day_of_week = $2 LIMIT 1", technicianID, dow)
+    if err2 == nil {
+        // technician has schedule rows on that day but none of them are a WORKING segment covering the interval
+        logrus.WithField("technician_id", technicianID).Debug("technician has schedule rows but no working coverage for interval")
+        return false, nil
+    }
+    if err2 != sql.ErrNoRows {
+        return false, err2
+    }
+
+    // No explicit schedule rows exist for this technician on that day. Apply a simple default working window from config.
     ls := localStart.Format("15:04:05")
     le := localEnd.Format("15:04:05")
     logrus.WithFields(logrus.Fields{"technician_id": technicianID, "ls": ls, "le": le, "default_start": config.DefaultWorkingStart, "default_end": config.DefaultWorkingEnd}).Debug("no explicit schedule, checking default window")
