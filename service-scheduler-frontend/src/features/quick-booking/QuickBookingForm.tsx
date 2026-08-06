@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { listServiceTypes } from './api/serviceTypes'
 import type { ServiceType } from './api/serviceTypes'
 import { listTechnicians } from './api/technicians'
 import { listDealerships } from './api/dealerships'
 import { createQuickBooking } from './api/bookings'
 import { localDatetimeToOffsetString } from './utils'
+import { checkAvailability } from './api/availability'
 
 import type { FieldDef } from './types'
 import { OptionsKey } from './types'
@@ -37,6 +38,9 @@ export default function QuickBookingForm({ fields }: Props) {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const formRef = useRef<any>(null)
+  const suppressUntilRef = useRef<number>(0)
+  const availSeqRef = useRef<number>(0)
   const [form, setForm] = useState<any>({
     customer_first_name: '',
     customer_last_name: '',
@@ -146,6 +150,81 @@ export default function QuickBookingForm({ fields }: Props) {
     setForm((f: any) => ({ ...f, [name]: v }))
   }
 
+  const [availability, setAvailability] = useState<any | null>(null)
+  const [availLoading, setAvailLoading] = useState(false)
+
+  // helper to run availability check (reads latest form from ref so WS-triggered checks use current values)
+  const runAvailabilityCheck = async (immediate = false) => {
+    // suppress availability checks briefly after a successful booking initiated from this client
+    if (Date.now() < suppressUntilRef.current) return
+    // avoid checking while this client is submitting a booking
+    if (loading) return
+
+    const cur = formRef.current ?? form
+    if (!cur || !cur.desired_start || !cur.dealership_id) return
+    const payload: any = {
+      dealership_id: cur.dealership_id,
+      desired_start: localDatetimeToOffsetString(cur.desired_start),
+      service_type: cur.service_type || '',
+    }
+    if (cur.preferred_technician_id) payload.preferred_technician_id = cur.preferred_technician_id
+    if (cur.service_type === '__other__') payload.other_duration_minutes = Number(cur.other_duration_minutes || 0)
+
+    setAvailLoading(true)
+    const seq = ++availSeqRef.current
+    try {
+      const resp = await checkAvailability(payload)
+      // ignore if a newer check started
+      if (availSeqRef.current !== seq) return
+      setAvailability(resp)
+    } catch (e) {
+      console.error('availability check failed', e)
+      // ignore if a newer check started
+      if (availSeqRef.current !== seq) return
+      setAvailability(null)
+    } finally {
+      if (availSeqRef.current === seq) setAvailLoading(false)
+    }
+  }
+
+  // keep a ref of current form so WS handlers can read latest values
+  useEffect(() => { formRef.current = form }, [form])
+
+  // debounced availability check when time or technician/service changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void runAvailabilityCheck()
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [form.desired_start, form.preferred_technician_id, form.service_type, form.other_duration_minutes, form.dealership_id])
+
+  // websocket subscription to receive appointment events for the dealership; triggers availability re-check
+  useEffect(() => {
+    let ws: WebSocket | null = null
+    if (!form.dealership_id) return
+    try {
+      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+      const host = window.location.hostname
+      const url = `${protocol}://${host}:8080/ws?dealership_id=${encodeURIComponent(form.dealership_id)}`
+      ws = new WebSocket(url)
+      ws.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data)
+          if (data && data.type) {
+            // appointment created/updated -> re-run availability check immediately
+            // read latest form via ref inside runAvailabilityCheck
+            void runAvailabilityCheck(true)
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+    } catch (e) {
+      console.error('ws connect failed', e)
+    }
+    return () => { if (ws) ws.close() }
+  }, [form.dealership_id])
+
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
@@ -163,6 +242,11 @@ export default function QuickBookingForm({ fields }: Props) {
       }
       const resp = await createQuickBooking(payload)
       setResult(resp.appointment_id)
+      // suppress availability checks briefly to avoid the just-created appointment immediately flipping the UI
+      suppressUntilRef.current = Date.now() + 1500
+      // bump sequence to invalidate any in-flight availability responses
+      availSeqRef.current++
+      setAvailability(null)
     } catch (err: any) {
       setError(err.message || String(err))
     } finally {
@@ -225,6 +309,27 @@ export default function QuickBookingForm({ fields }: Props) {
               type="number"
               required
               />
+          )}
+
+          {/* Availability indicator row */}
+          {!result && availability && (
+            <div className="col-span-2 mt-2">
+              {form.preferred_technician_id ? (
+                availability.technician_available ? (
+                  <span className="text-green-600">Technician available ✓</span>
+                ) : (
+                  <span className="text-red-600">Technician: {availability.technician_reason || 'not available'}</span>
+                )
+              ) : null}
+
+              <span className="ml-4">
+                {availability.bay_available ? (
+                  <span className="text-green-600">Bay available ✓</span>
+                ) : (
+                  <span className="text-red-600">No bay available</span>
+                )}
+              </span>
+            </div>
           )}
         </div>
 
