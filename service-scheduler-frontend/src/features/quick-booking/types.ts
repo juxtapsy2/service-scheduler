@@ -1,8 +1,10 @@
-export const enum OptionsKey {
-  Dealerships = 'dealerships',
-  Technicians = 'technicians',
-  ServiceTypes = 'serviceTypes',
-}
+export const OptionsKey = {
+  Dealerships: 'dealerships',
+  Technicians: 'technicians',
+  ServiceTypes: 'serviceTypes',
+} as const
+
+export type OptionsKey = (typeof OptionsKey)[keyof typeof OptionsKey]
 
 export type FieldDef = {
   name: string

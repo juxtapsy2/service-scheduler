@@ -160,7 +160,7 @@ export default function QuickBookingForm({ fields }: Props) {
   }
 
   const [availability, setAvailability] = useState<any | null>(null)
-  const [availLoading, setAvailLoading] = useState(false)
+  const [, setAvailLoading] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<Record<string,string | null>>({})
 
   const [toast, setToast] = useState<{message: string, type: 'success' | 'danger'} | null>(null)
@@ -170,7 +170,7 @@ export default function QuickBookingForm({ fields }: Props) {
   }
 
   // helper to run availability check (reads latest form from ref so WS-triggered checks use current values)
-  const runAvailabilityCheck = async (immediate = false) => {
+  const runAvailabilityCheck = async () => {
     // suppress availability checks briefly after a successful booking initiated from this client
     if (Date.now() < suppressUntilRef.current) return
     // avoid checking while this client is submitting a booking
@@ -229,7 +229,7 @@ export default function QuickBookingForm({ fields }: Props) {
           if (data && data.type) {
             // appointment created/updated -> re-run availability check immediately
             // read latest form via ref inside runAvailabilityCheck
-            void runAvailabilityCheck(true)
+            void runAvailabilityCheck()
           }
         } catch (e) {
           // ignore
@@ -287,7 +287,7 @@ export default function QuickBookingForm({ fields }: Props) {
   }
 
   return (
-    <div className="container py-4 min-w-5xl">
+    <div className="container py-4 min-w-3xl md:min-w-5xl flex flex-col items-center justify-center">
       <form onSubmit={submit} className="form-card w-full">
         <h2 className="form-title">Service Scheduler</h2>
         <div className="row gx-3 gy-3">

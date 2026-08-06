@@ -1,5 +1,5 @@
 import React from 'react'
-import type { FieldDef, OptionsKey } from './types'
+import type { FieldDef } from '../types'
 
 type Props = {
   field: FieldDef

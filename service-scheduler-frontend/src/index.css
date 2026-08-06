@@ -57,16 +57,13 @@
 }
 
 #root {
-  /* center the single-page app both vertically and horizontally */
-  min-height: 100svh;
+  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
   box-sizing: border-box;
 }
 
-/* center content within the main container and constrain width for optimal layout */
 .container {
   width: 100%;
   display: flex;
@@ -130,14 +127,9 @@ p { margin: 0 }
 
 /* page background texture using palette colors */
 body {
-  background: linear-gradient(135deg,
-    rgba(39,38,67,0.15) 0%,
-    rgba(255,255,255,0.06) 20%,
-    rgba(227,246,245,0.06) 40%,
-    rgba(186,232,232,0.06) 60%,
-    rgba(44,105,141,0.06) 80%
-  ), var(--bg);
-  background-size: 1200px 1200px;
+  background-image: radial-gradient(var(--palette-200) 1px, transparent 1px),
+                    radial-gradient(var(--palette-200) 1px, transparent 1px);
+  background-size: 50px 50px;
 }
 
 /* title styling */
