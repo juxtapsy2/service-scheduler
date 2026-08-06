@@ -35,23 +35,29 @@ func (h *TechniciansHandler) List(c *gin.Context) {
 		return
 	}
 
-	// optional service_type name to filter qualified technicians
-	svcName := c.Query("service_type")
-	if svcName == "" {
+	// optional service_type filter to return only qualified technicians.
+	// accept either a service type id (UUID) or name.
+	svc := c.Query("service_type")
+	if svc == "" {
 		c.JSON(http.StatusOK, rows)
 		return
 	}
 
-	// resolve service type name to id
-	stid, err := h.repo.GetServiceTypeIDByName(c.Request.Context(), svcName)
+	// try resolving the value as a service type name first
+	stid, err := h.repo.GetServiceTypeIDByName(c.Request.Context(), svc)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	if stid == "" {
-		// unknown service type -> return empty list
-		c.JSON(http.StatusOK, []map[string]interface{}{})
-		return
+		// not a name; maybe the client sent an id directly. verify it exists.
+		if _, err2 := h.repo.GetServiceDuration(c.Request.Context(), svc); err2 == nil {
+			stid = svc
+		} else {
+			// unknown service type -> return empty list
+			c.JSON(http.StatusOK, []map[string]interface{}{})
+			return
+		}
 	}
 
 	// find qualified technician ids for dealership + service type

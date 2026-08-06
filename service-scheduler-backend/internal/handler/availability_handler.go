@@ -59,15 +59,20 @@ func (h *AvailabilityHandler) Check(c *gin.Context) {
 			return
 		}
 	} else {
-		// resolve service type name -> id
+		// resolve service type name -> id, but accept client-provided id as well
 		stid, err := h.repo.GetServiceTypeIDByName(ctx, req.ServiceType)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 		if stid == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "unknown service type"})
-			return
+			// maybe client supplied an id; verify by checking duration
+			if _, err2 := h.repo.GetServiceDuration(ctx, req.ServiceType); err2 == nil {
+			    stid = req.ServiceType
+			} else {
+			    c.JSON(http.StatusBadRequest, gin.H{"error": "unknown service type"})
+			    return
+			}
 		}
 		d, err := h.repo.GetServiceDuration(ctx, stid)
 		if err != nil {
@@ -75,6 +80,8 @@ func (h *AvailabilityHandler) Check(c *gin.Context) {
 			return
 		}
 		durationMinutes = d
+		// store resolved id back into req.ServiceType for later qualification checks
+		req.ServiceType = stid
 	}
 
 	// parse DesiredStart preserving offset

@@ -7,8 +7,11 @@ import { createQuickBooking } from './api/bookings'
 import { localDatetimeToOffsetString } from './utils'
 import { checkAvailability } from './api/availability'
 
+import { validateField } from './validation'
+
 import type { FieldDef } from './types'
 import { OptionsKey } from './types'
+import DynamicField from './components/DynamicField'
 
 type Props = {
   fields?: FieldDef[]
@@ -24,8 +27,8 @@ const defaultFields: FieldDef[] = [
   { name: 'vehicle_model', label: 'Model', required: true },
   { name: 'vehicle_year', label: 'Year', type: 'number', required: true },
   { name: 'dealership_id', label: 'Dealership', required: true, type: 'select', optionsKey: OptionsKey.Dealerships },
-  { name: 'preferred_technician_id', label: 'Preferred technician', type: 'select', optionsKey: OptionsKey.Technicians },
   { name: 'service_type', label: 'Service type', required: true, type: 'select', optionsKey: OptionsKey.ServiceTypes },
+  { name: 'preferred_technician_id', label: 'Preferred technician', type: 'select', optionsKey: OptionsKey.Technicians },
   { name: 'desired_start', label: 'Desired start', placeholder: '', type: 'datetime-local', required: true },
 ]
 
@@ -65,7 +68,7 @@ export default function QuickBookingForm({ fields }: Props) {
       .then((list) => {
         if (!mounted) return
         setServiceTypes(list)
-        if (list.length > 0) setForm((f: any) => ({ ...f, service_type: list[0].name }))
+      if (list.length > 0) setForm((f: any) => ({ ...f, service_type: list[0].id }))
       })
       .catch((e) => console.error('failed to load service types', e))
 
@@ -96,6 +99,12 @@ export default function QuickBookingForm({ fields }: Props) {
     const { name, value, type } = e.target as HTMLInputElement
     let v: any = value
     if (type === 'number') v = value === '' ? '' : Number(value)
+
+    // compute a validation hint but do NOT block typing — regexes require a full
+    // match, so rejecting intermediate values would prevent users from entering
+    // emails/phones/VINs/years. Validation is enforced on submit (see submit()).
+    const vError = validateField(name, v)
+    setFieldErrors((fe: any) => ({ ...fe, [name]: vError }))
 
     // if dealership changes, reload technicians (respect currently-selected service type)
     if (name === 'dealership_id') {
@@ -152,6 +161,13 @@ export default function QuickBookingForm({ fields }: Props) {
 
   const [availability, setAvailability] = useState<any | null>(null)
   const [availLoading, setAvailLoading] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<Record<string,string | null>>({})
+
+  const [toast, setToast] = useState<{message: string, type: 'success' | 'danger'} | null>(null)
+  function showToast(message: string, type: 'success' | 'danger' = 'success') {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3500)
+  }
 
   // helper to run availability check (reads latest form from ref so WS-triggered checks use current values)
   const runAvailabilityCheck = async (immediate = false) => {
@@ -229,6 +245,19 @@ export default function QuickBookingForm({ fields }: Props) {
     e.preventDefault()
     setError(null)
     setResult(null)
+
+    // enforce validation on submit (inline hints are non-blocking)
+    const errors: Record<string, string | null> = {}
+    for (const f of useFields) {
+      errors[f.name] = validateField(f.name, form[f.name])
+    }
+    const invalid = useFields.find((f) => f.required && validateField(f.name, form[f.name]))
+    if (invalid) {
+      setFieldErrors(errors)
+      setError('Please fix the invalid fields before booking.')
+      return
+    }
+
     setLoading(true)
     try {
       // convert datetime-local to timestamp with local offset so backend receives user's local hour
@@ -242,103 +271,100 @@ export default function QuickBookingForm({ fields }: Props) {
       }
       const resp = await createQuickBooking(payload)
       setResult(resp.appointment_id)
+      showToast('Booked: ' + resp.appointment_id, 'success')
       // suppress availability checks briefly to avoid the just-created appointment immediately flipping the UI
       suppressUntilRef.current = Date.now() + 1500
       // bump sequence to invalidate any in-flight availability responses
       availSeqRef.current++
       setAvailability(null)
     } catch (err: any) {
-      setError(err.message || String(err))
+      const msg = err?.message || String(err)
+      setError(msg)
+      showToast(msg, 'danger')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="p-6 max-w-xl mx-auto">
-      <h2 className="text-2xl font-semibold mb-4">Quick Booking</h2>
-      <form onSubmit={submit} className="space-y-3 bg-white p-4 rounded shadow">
-        <div className="grid grid-cols-2 gap-3">
+    <div className="container py-4 min-w-5xl">
+      <form onSubmit={submit} className="form-card w-full">
+        <h2 className="form-title">Service Scheduler</h2>
+        <div className="row gx-3 gy-3">
           {useFields.map((f) => {
-            if (f.type === 'select') {
-              const key = f.optionsKey
-              const options = key === OptionsKey.Dealerships ? dealerships : key === OptionsKey.Technicians ? technicians : key === OptionsKey.ServiceTypes ? serviceTypes : []
-
-              return (
-                <select key={f.name} name={f.name} value={form[f.name] ?? ''} onChange={handleChange} className="p-2 border rounded" required={f.required}>
-                  {key === OptionsKey.Technicians && <option value="">(Any available)</option>}
-                  {options.map((o: any) => {
-                    switch (key) {
-                      case OptionsKey.ServiceTypes:
-                        return <option key={o.id} value={o.name}>{o.name}</option>
-                      case OptionsKey.Dealerships:
-                        return <option key={o.id} value={o.id}>{o.name}</option>
-                      case OptionsKey.Technicians:
-                        return <option key={o.id} value={o.id}>{o.first_name} {o.last_name}</option>
-                      default:
-                        return <option key={o.id} value={o.id}>{o.name ?? o.id}</option>
-                    }
-                  })}
-                  {/* allow ad-hoc Other service type which skips qualification */}
-                  {key === OptionsKey.ServiceTypes && <option key="__other__" value="__other__">Other</option>}
-                </select>
-              )
-            }
+            const key = f.optionsKey
+            const options = key === OptionsKey.Dealerships ? dealerships : key === OptionsKey.Technicians ? technicians : key === OptionsKey.ServiceTypes ? serviceTypes : []
 
             return (
-              <input
+              <DynamicField
                 key={f.name}
-                name={f.name}
-                placeholder={f.placeholder || f.label}
-                value={form[f.name] ?? ''}
+                field={f}
+                value={form[f.name]}
                 onChange={handleChange}
-                className={`p-2 border rounded ${f.type === 'number' ? '' : ''}`}
-                required={f.required}
-                type={(f.type as any) || 'text'}
+                options={options}
+                error={fieldErrors[f.name]}
               />
             )
           })}
-          {/* If user picked Other service type, show duration input */}
+
+          {/* If user picked Other service type, show duration input (two-column) */}
           {form.service_type === '__other__' && (
-            <input
-              name="other_duration_minutes"
-              placeholder="Duration (minutes)"
-              value={form.other_duration_minutes ?? 30}
-              onChange={handleChange}
-              className="p-2 border rounded"
-              type="number"
-              required
-              />
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-y-2 items-center mb-3">
+              <div className="md:col-span-2 md:text-right pr-4"><label className="text-sm font-semibold text-gray-800 form-label">Duration (minutes)</label></div>
+              <div className="md:col-span-4">
+                <input
+                  name="other_duration_minutes"
+                  placeholder="Duration (minutes)"
+                  value={form.other_duration_minutes ?? 30}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border rounded form-control"
+                  type="number"
+                  required
+                />
+                {fieldErrors['other_duration_minutes'] && <div className="text-sm text-red-700 mt-1">{fieldErrors['other_duration_minutes']}</div>}
+              </div>
+            </div>
           )}
 
           {/* Availability indicator row */}
           {!result && availability && (
-            <div className="col-span-2 mt-2">
+            <div className="flex flex-col mt-4 text-wrap">
               {form.preferred_technician_id ? (
                 availability.technician_available ? (
-                  <span className="text-green-600">Technician available ✓</span>
+                  <span className="text-success">Technician available ✓</span>
                 ) : (
-                  <span className="text-red-600">Technician: {availability.technician_reason || 'not available'}</span>
+                  <span className="text-danger">Error: {availability.technician_reason || 'not available'}</span>
                 )
               ) : null}
 
-              <span className="ml-4">
+              <span className="ml-3">
                 {availability.bay_available ? (
-                  <span className="text-green-600">Bay available ✓</span>
+                  <span className="text-success">Bay available ✓</span>
                 ) : (
-                  <span className="text-red-600">No bay available</span>
+                  <span className="text-danger">No bay available</span>
                 )}
               </span>
             </div>
           )}
         </div>
 
-<div className="flex items-center justify-between">
-          <button type="submit" disabled={loading} className="bg-indigo-600 text-white px-4 py-2 rounded">{loading ? 'Booking...' : 'Book'}</button>
-          {result && <span className="text-green-600">Booked: {result}</span>}
-          {error && <span className="text-red-600">{error}</span>}
+        <div className="d-flex justify-content-between align-items-center pt-4">
+          <button type="submit" disabled={loading} className="btn btn-primary rounded-md border-none shadow-sm">{loading ? 'Booking...' : 'Book'}</button>
+          <div>
+            {result && <span className="text-success">Booked: {result}</span>}
+            {error && <span className="text-danger ms-2">{error}</span>}
+          </div>
         </div>
       </form>
+
+      {/* Toast area */}
+      <div aria-live="polite" aria-atomic="true" style={{ position: 'fixed', top: 20, right: 20, zIndex: 2000 }}>
+        {toast && (
+          <div className={`alert ${toast.type === 'success' ? 'alert-success' : 'alert-danger'}`} role="alert">
+            {toast.message}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

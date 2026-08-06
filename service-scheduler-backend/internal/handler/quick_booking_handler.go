@@ -44,7 +44,7 @@ func (h *QuickBookingHandler) QuickBook(c *gin.Context) {
 		return
 	}
 
-	// resolve service type by name unless user picked the special "__other__" sentinel
+	// resolve service type by name or accept id, unless user picked the special "__other__" sentinel
 	var serviceTypeID string
 	var durationMinutes int
 	if req.ServiceType == "__other__" {
@@ -54,22 +54,22 @@ func (h *QuickBookingHandler) QuickBook(c *gin.Context) {
 			return
 		}
 	} else {
-		rows, err := h.repo.GetServiceTypes(c.Request.Context())
+		// first try resolving by name
+		stid, err := h.repo.GetServiceTypeIDByName(c.Request.Context(), req.ServiceType)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		for _, rmap := range rows {
-			if name, ok := rmap["name"].(string); ok && name == req.ServiceType {
-				if id, ok := rmap["id"].(string); ok {
-					serviceTypeID = id
-					break
-				}
+		if stid != "" {
+			serviceTypeID = stid
+		} else {
+			// maybe client already submitted an id; verify it exists by fetching duration
+			if _, err2 := h.repo.GetServiceDuration(c.Request.Context(), req.ServiceType); err2 == nil {
+				serviceTypeID = req.ServiceType
+			} else {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "unknown service type"})
+				return
 			}
-		}
-		if serviceTypeID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "unknown service type"})
-			return
 		}
 	}
 

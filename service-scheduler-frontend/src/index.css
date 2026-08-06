@@ -2,18 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Palette from https://colors.muz.li/palette/272643/ffffff/e3f6f5/bae8e8/2c698d */
 :root {
+  --palette-900: #272643; /* deep */
+  --palette-000: #ffffff; /* white */
+  --palette-100: #e3f6f5; /* very light */
+  --palette-200: #bae8e8; /* light aqua */
+  --palette-500: #2c698d; /* blue */
+
   --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
+  --text-h: var(--palette-900);
+  --bg: var(--palette-100);
   --border: #e5e4e7;
   --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
+  --accent: var(--palette-500);
+  --accent-bg: rgba(44, 105, 141, 0.08);
+  --accent-border: rgba(44, 105, 141, 0.3);
   --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+    rgba(0, 0, 0, 0.06) 0 10px 15px -3px, rgba(0, 0, 0, 0.03) 0 4px 6px -2px;
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
@@ -34,40 +40,43 @@
   }
 }
 
+/* simple dark adjustments keep palette legible */
 @media (prefers-color-scheme: dark) {
   :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
+    --text: #cbd5e1;
+    --text-h: #ffffff;
+    --bg: #0f1724;
+    --border: #192432;
+    --code-bg: #071022;
+    --accent: var(--palette-500);
+    --accent-bg: rgba(44, 105, 141, 0.12);
+    --accent-border: rgba(44, 105, 141, 0.4);
     --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
+      rgba(0, 0, 0, 0.6) 0 10px 15px -3px, rgba(0, 0, 0, 0.4) 0 4px 6px -2px;
   }
 }
 
 #root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
+  /* center the single-page app both vertically and horizontally */
   min-height: 100svh;
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
   box-sizing: border-box;
+}
+
+/* center content within the main container and constrain width for optimal layout */
+.container {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 body {
   margin: 0;
+  background: var(--bg);
 }
 
 h1,
@@ -95,21 +104,48 @@ h2 {
     font-size: 20px;
   }
 }
-p {
-  margin: 0;
+p { margin: 0 }
+
+/* form styles to ensure labels are on left and inputs on right */
+/* minimal fallback; prefer Tailwind utilities for layout */
+.form-label { margin-bottom: 0; }
+.form-control, .form-select { width: 100%; }
+
+.form-card {
+  background: var(--palette-000);
+  border: 1px solid var(--accent-border);
+  box-shadow: var(--shadow);
+  padding: 20px;
+  border-radius: 8px;
+  width: 100%;
+  margin: 0 auto;
 }
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
+.btn-primary {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff; /* ensure contrast */
+  font-weight: 600;
 }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+/* page background texture using palette colors */
+body {
+  background: linear-gradient(135deg,
+    rgba(39,38,67,0.15) 0%,
+    rgba(255,255,255,0.06) 20%,
+    rgba(227,246,245,0.06) 40%,
+    rgba(186,232,232,0.06) 60%,
+    rgba(44,105,141,0.06) 80%
+  ), var(--bg);
+  background-size: 1200px 1200px;
 }
+
+/* title styling */
+.form-card h2, .form-title { color: var(--palette-900); font-size: 28px; margin-bottom: 12px }
+
+/* availability badges */
+.text-success { color: #0f5132 }
+.text-danger { color: #842029 }
+
+code, .counter { font-family: var(--mono); display: inline-flex; border-radius: 4px; color: var(--text-h) }
+code { font-size: 15px; line-height: 135%; padding: 4px 8px; background: var(--code-bg); }
