@@ -49,6 +49,7 @@ export default function QuickBookingForm({ fields }: Props) {
     dealership_id: '11111111-1111-1111-1111-111111111111',
     preferred_technician_id: '',
     service_type: '',
+    other_duration_minutes: 30,
     desired_start: '',
   })
 
@@ -92,17 +93,52 @@ export default function QuickBookingForm({ fields }: Props) {
     let v: any = value
     if (type === 'number') v = value === '' ? '' : Number(value)
 
-    // if dealership changes, reload technicians
+    // if dealership changes, reload technicians (respect currently-selected service type)
     if (name === 'dealership_id') {
       const dealerId = value
       // optimistic update
       setForm((f: any) => ({ ...f, dealership_id: dealerId }))
-      listTechnicians(dealerId)
-        .then((tlist) => {
-          setTechnicians(tlist)
-          setForm((f: any) => ({ ...f, preferred_technician_id: tlist.length > 0 ? tlist[0].id : '' }))
-        })
-        .catch((e) => console.error('failed to load technicians', e))
+      const svc = form.service_type
+      if (svc && svc !== '__other__') {
+        listTechnicians(dealerId, svc)
+          .then((tlist) => {
+            setTechnicians(tlist)
+            setForm((f: any) => ({ ...f, preferred_technician_id: tlist.length > 0 ? tlist[0].id : '' }))
+          })
+          .catch((e) => console.error('failed to load technicians', e))
+      } else {
+        listTechnicians(dealerId)
+          .then((tlist) => {
+            setTechnicians(tlist)
+            setForm((f: any) => ({ ...f, preferred_technician_id: tlist.length > 0 ? tlist[0].id : '' }))
+          })
+          .catch((e) => console.error('failed to load technicians', e))
+      }
+      return
+    }
+
+    // if service type changes, reload technicians filtered by service type (unless Other selected)
+    if (name === 'service_type') {
+      const svc = value
+      setForm((f: any) => ({ ...f, service_type: svc }))
+      const dealerId = form.dealership_id
+      if (!dealerId) return
+      if (svc && svc !== '__other__') {
+        listTechnicians(dealerId, svc)
+          .then((tlist) => {
+            setTechnicians(tlist)
+            setForm((f: any) => ({ ...f, preferred_technician_id: tlist.length > 0 ? tlist[0].id : '' }))
+          })
+          .catch((e) => console.error('failed to load technicians', e))
+      } else {
+        // Other: show all technicians (no qualification)
+        listTechnicians(dealerId)
+          .then((tlist) => {
+            setTechnicians(tlist)
+            setForm((f: any) => ({ ...f, preferred_technician_id: tlist.length > 0 ? tlist[0].id : '' }))
+          })
+          .catch((e) => console.error('failed to load technicians', e))
+      }
       return
     }
 
@@ -159,6 +195,8 @@ export default function QuickBookingForm({ fields }: Props) {
                         return <option key={o.id} value={o.id}>{o.name ?? o.id}</option>
                     }
                   })}
+                  {/* allow ad-hoc Other service type which skips qualification */}
+                  {key === OptionsKey.ServiceTypes && <option key="__other__" value="__other__">Other</option>}
                 </select>
               )
             }
@@ -176,6 +214,18 @@ export default function QuickBookingForm({ fields }: Props) {
               />
             )
           })}
+          {/* If user picked Other service type, show duration input */}
+          {form.service_type === '__other__' && (
+            <input
+              name="other_duration_minutes"
+              placeholder="Duration (minutes)"
+              value={form.other_duration_minutes ?? 30}
+              onChange={handleChange}
+              className="p-2 border rounded"
+              type="number"
+              required
+              />
+          )}
         </div>
 
 <div className="flex items-center justify-between">

@@ -44,24 +44,33 @@ func (h *QuickBookingHandler) QuickBook(c *gin.Context) {
         return
     }
 
-    // resolve service type by name
+    // resolve service type by name unless user picked the special "__other__" sentinel
     var serviceTypeID string
-    rows, err := h.repo.GetServiceTypes(c.Request.Context())
-    if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-        return
-    }
-    for _, rmap := range rows {
-        if name, ok := rmap["name"].(string); ok && name == req.ServiceType {
-            if id, ok := rmap["id"].(string); ok {
-                serviceTypeID = id
-                break
+    var durationMinutes int
+    if req.ServiceType == "__other__" {
+        durationMinutes = req.OtherDurationMinutes
+        if durationMinutes <= 0 {
+            c.JSON(http.StatusBadRequest, gin.H{"error": "other_duration_minutes must be provided and > 0 when Service Type is Other"})
+            return
+        }
+    } else {
+        rows, err := h.repo.GetServiceTypes(c.Request.Context())
+        if err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+            return
+        }
+        for _, rmap := range rows {
+            if name, ok := rmap["name"].(string); ok && name == req.ServiceType {
+                if id, ok := rmap["id"].(string); ok {
+                    serviceTypeID = id
+                    break
+                }
             }
         }
-    }
-    if serviceTypeID == "" {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "unknown service type"})
-        return
+        if serviceTypeID == "" {
+            c.JSON(http.StatusBadRequest, gin.H{"error": "unknown service type"})
+            return
+        }
     }
 
     // build BookingRequest
@@ -70,6 +79,7 @@ func (h *QuickBookingHandler) QuickBook(c *gin.Context) {
         VehicleID:     vehicleID,
         DealershipID:  req.DealershipID,
         ServiceTypeID: serviceTypeID,
+        DurationMinutes: durationMinutes,
         PreferredTechnicianID: req.PreferredTechnicianID,
         DesiredStart:  req.DesiredStart,
     }

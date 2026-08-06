@@ -6,7 +6,10 @@ export type Technician = {
   last_name: string
 }
 
-export async function listTechnicians(dealershipId: string): Promise<Technician[]> {
-  const query = `?dealership_id=${encodeURIComponent(dealershipId)}`
+export async function listTechnicians(dealershipId: string, serviceType?: string): Promise<Technician[]> {
+  let query = `?dealership_id=${encodeURIComponent(dealershipId)}`
+  if (serviceType) {
+    query += `&service_type=${encodeURIComponent(serviceType)}`
+  }
   return apiClient.get<Technician[]>(`/api/technicians${query}`)
 }

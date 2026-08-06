@@ -28,16 +28,26 @@ func NewBookingService(repo *repository.BookingRepository) *BookingService {
 
 // Book attempts to create an appointment transactionally
 func (s *BookingService) Book(ctx context.Context, req *models.BookingRequest) (string, error) {
-    // compute end time from service duration
-    durMin, err := s.repo.GetServiceDuration(ctx, req.ServiceTypeID)
-    if err != nil {
-        return "", err
+    // compute end time from service duration. Support ad-hoc "Other" services via DurationMinutes.
+    var durMin int
+    if req.ServiceTypeID != "" {
+        var err error
+        durMin, err = s.repo.GetServiceDuration(ctx, req.ServiceTypeID)
+        if err != nil {
+            return "", err
+        }
+    } else {
+        durMin = req.DurationMinutes
+        if durMin <= 0 {
+            return "", errors.New("missing duration for Other service type")
+        }
     }
     end := req.DesiredStart.Add(time.Duration(durMin) * time.Minute)
 
     logrus.WithFields(logrus.Fields{
         "dealership_id": req.DealershipID,
         "service_type_id": req.ServiceTypeID,
+        "duration_minutes": durMin,
         "desired_start": req.DesiredStart.Format(time.RFC3339),
         "desired_end": end.Format(time.RFC3339),
         "preferred_technician": req.PreferredTechnicianID,

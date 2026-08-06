@@ -7,7 +7,9 @@ type BookingRequest struct {
     CustomerID    string    `json:"customer_id" binding:"required,uuid"`
     VehicleID     string    `json:"vehicle_id" binding:"required,uuid"`
     DealershipID  string    `json:"dealership_id" binding:"required,uuid"`
-    ServiceTypeID string    `json:"service_type_id" binding:"required,uuid"`
+    ServiceTypeID string    `json:"service_type_id" binding:"omitempty,uuid"`
+    // DurationMinutes is used when booking for an "Other" service type where no service_type id exists
+    DurationMinutes int `json:"duration_minutes,omitempty"`
     PreferredTechnicianID string `json:"preferred_technician_id" binding:"omitempty,uuid"`
     DesiredStart  time.Time `json:"desired_start" binding:"required"`
 }
@@ -25,7 +27,8 @@ type QuickBookingRequest struct {
     VehicleYear  int    `json:"vehicle_year" binding:"required"`
 
     DealershipID   string    `json:"dealership_id" binding:"required,uuid"`
-    ServiceType    string    `json:"service_type" binding:"required"` // name or id
+    ServiceType    string    `json:"service_type" binding:"required"` // name or id; use "__other__" for Other
+    OtherDurationMinutes int `json:"other_duration_minutes,omitempty"`
     PreferredTechnicianID string `json:"preferred_technician_id" binding:"omitempty,uuid"`
     DesiredStart   time.Time `json:"desired_start" binding:"required"`
 }

@@ -23,6 +23,13 @@ func NewBookingRepository(db *sqlx.DB) *BookingRepository {
 // FindQualifiedTechnicians returns technician IDs qualified for a service at a dealership
 func (r *BookingRepository) FindQualifiedTechnicians(ctx context.Context, dealershipID, serviceTypeID string) ([]string, error) {
     var ids []string
+    if serviceTypeID == "" {
+        // no qualification required: return all active technicians for dealership
+        query := `SELECT id FROM technician WHERE dealership_id = $1 AND active = true ORDER BY last_name, first_name`
+        err := r.db.SelectContext(ctx, &ids, query, dealershipID)
+        return ids, err
+    }
+
     query := `
 SELECT t.id
 FROM technician t
@@ -30,7 +37,7 @@ JOIN technician_qualification q ON q.technician_id = t.id
 WHERE t.dealership_id = $1
   AND q.service_type_id = $2
   AND t.active = true
-` 
+`
     err := r.db.SelectContext(ctx, &ids, query, dealershipID, serviceTypeID)
     return ids, err
 }
@@ -213,6 +220,19 @@ func (r *BookingRepository) GetServiceTypes(ctx context.Context) ([]map[string]i
         out = append(out, m)
     }
     return out, nil
+}
+
+// GetServiceTypeIDByName returns the id for a service_type name (or empty string if not found)
+func (r *BookingRepository) GetServiceTypeIDByName(ctx context.Context, name string) (string, error) {
+    var id string
+    err := r.db.GetContext(ctx, &id, "SELECT id FROM service_type WHERE name = $1 LIMIT 1", name)
+    if err == sql.ErrNoRows {
+        return "", nil
+    }
+    if err != nil {
+        return "", err
+    }
+    return id, nil
 }
 
 // GetDealerships returns id and name for all dealerships
