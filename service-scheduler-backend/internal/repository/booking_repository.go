@@ -50,6 +50,12 @@ func (r *BookingRepository) TechnicianHasWorkingPeriod(ctx context.Context, tech
 	localEnd := end
 
 	// Check each day segment; for simplicity assume appointment is within single day
+	// If appointment spans multiple calendar days in the client's timezone, reject (not supported yet)
+	if localStart.Year() != localEnd.Year() || localStart.YearDay() != localEnd.YearDay() {
+		logrus.WithFields(logrus.Fields{"technician_id": technicianID, "start": localStart.Format(time.RFC3339), "end": localEnd.Format(time.RFC3339)}).Debug("appointment spans multiple days; rejecting for working-period check")
+		return false, nil
+	}
+
 	query := `
 SELECT 1 FROM technician_schedule s
 WHERE s.technician_id = $1

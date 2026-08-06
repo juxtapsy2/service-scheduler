@@ -24,20 +24,21 @@ func (h *AvailabilityHandler) RegisterRoutes(r *gin.Engine) {
 }
 
 // availability request from frontend
+// DesiredStart expected as RFC3339 string with timezone offset (e.g. 2026-08-06T23:00:00+07:00)
 type availabilityRequest struct {
-	DealershipID          string    `json:"dealership_id" binding:"required,uuid"`
-	PreferredTechnicianID string    `json:"preferred_technician_id" binding:"omitempty,uuid"`
-	ServiceType           string    `json:"service_type" binding:"required"`
-	OtherDurationMinutes  int       `json:"other_duration_minutes,omitempty"`
-	DesiredStart          time.Time `json:"desired_start" binding:"required"`
+	DealershipID          string `json:"dealership_id" binding:"required,uuid"`
+	PreferredTechnicianID string `json:"preferred_technician_id" binding:"omitempty,uuid"`
+	ServiceType           string `json:"service_type" binding:"required"`
+	OtherDurationMinutes  int    `json:"other_duration_minutes,omitempty"`
+	DesiredStart          string `json:"desired_start" binding:"required"`
 }
 
 type availabilityResponse struct {
-	TechnicianAvailable bool      `json:"technician_available"`
-	TechnicianReason    string    `json:"technician_reason,omitempty"`
-	BayAvailable        bool      `json:"bay_available"`
-	BayID               string    `json:"bay_id,omitempty"`
-	DesiredEnd          time.Time `json:"desired_end"`
+	TechnicianAvailable bool   `json:"technician_available"`
+	TechnicianReason    string `json:"technician_reason,omitempty"`
+	BayAvailable        bool   `json:"bay_available"`
+	BayID               string `json:"bay_id,omitempty"`
+	DesiredEnd          string `json:"desired_end"`
 }
 
 func (h *AvailabilityHandler) Check(c *gin.Context) {
@@ -76,10 +77,15 @@ func (h *AvailabilityHandler) Check(c *gin.Context) {
 		durationMinutes = d
 	}
 
-	start := req.DesiredStart
+	// parse DesiredStart preserving offset
+	start, err := time.Parse(time.RFC3339, req.DesiredStart)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "desired_start must be RFC3339 with timezone offset (e.g. 2026-08-06T23:00:00+07:00)"})
+		return
+	}
 	end := start.Add(time.Duration(durationMinutes) * time.Minute)
 
-	resp := availabilityResponse{DesiredEnd: end}
+	resp := availabilityResponse{DesiredEnd: end.Format(time.RFC3339)}
 
 	// check bay availability (lightweight, non-locking)
 	bayID, err := h.repo.FindAvailableServiceBay(ctx, req.DealershipID, start, end)
