@@ -1,8 +1,7 @@
 import type { FieldDef } from './types'
 import { OptionsKey } from './types'
 import DynamicField from './components/DynamicField'
-import { useQuickBooking } from './useQuickBooking'
-
+import { useQuickBooking } from './hooks/useQuickBooking'
 import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 
