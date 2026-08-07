@@ -40,8 +40,8 @@ be-restart: ## Restart the backend
 
 be-logs: be ## Alias for be
 
-be-test: ## Run backend Go tests
-	cd $(BACKEND_DIR) && go test ./...
+be-test: ## Run backend Go tests (requires Postgres; loads .env)
+	set -a; . ./.env; set +a; cd $(BACKEND_DIR) && go test ./...
 
 fe: ## Tail frontend logs
 	$(COMPOSE) logs -f --tail=100 service-scheduler-frontend

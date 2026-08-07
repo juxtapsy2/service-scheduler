@@ -68,10 +68,10 @@ func (h *AvailabilityHandler) Check(c *gin.Context) {
 		if stid == "" {
 			// maybe client supplied an id; verify by checking duration
 			if _, err2 := h.repo.GetServiceDuration(ctx, req.ServiceType); err2 == nil {
-			    stid = req.ServiceType
+				stid = req.ServiceType
 			} else {
-			    c.JSON(http.StatusBadRequest, gin.H{"error": "unknown service type"})
-			    return
+				c.JSON(http.StatusBadRequest, gin.H{"error": "unknown service type"})
+				return
 			}
 		}
 		d, err := h.repo.GetServiceDuration(ctx, stid)

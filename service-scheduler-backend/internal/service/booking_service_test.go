@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 
@@ -31,4 +30,22 @@ func TestBook_NoTechnician(t *testing.T) {
 
 	_, err = svc.Book(context.Background(), req)
 	require.Error(t, err)
+}
+
+// Pure unit test (no DB): an "Other" service booking without a positive custom
+// duration must be rejected before any repository call is made.
+func TestBook_OtherServiceRequiresDuration(t *testing.T) {
+	svc := NewBookingService(nil)
+
+	req := &models.BookingRequest{
+		CustomerID:      "00000000-0000-0000-0000-000000000000",
+		VehicleID:       "00000000-0000-0000-0000-000000000000",
+		DealershipID:    "11111111-1111-1111-1111-111111111111",
+		ServiceTypeID:   "",
+		DurationMinutes: 0,
+		DesiredStart:    time.Now(),
+	}
+
+	_, err := svc.Book(context.Background(), req)
+	require.ErrorContains(t, err, "missing duration")
 }

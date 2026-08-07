@@ -167,9 +167,9 @@ INSERT INTO appointment (
 `
 	var svc interface{}
 	if serviceTypeID == "" {
-	    svc = nil
+		svc = nil
 	} else {
-	    svc = serviceTypeID
+		svc = serviceTypeID
 	}
 
 	_, err := tx.ExecContext(ctx, query, apptID, customerID, vehicleID, dealershipID, svc, technicianID, serviceBayID, start, end)
