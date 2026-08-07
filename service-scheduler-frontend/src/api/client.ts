@@ -2,7 +2,7 @@ export class APIClient {
   baseUrl: string
 
   constructor(baseUrl?: string) {
-    this.baseUrl = baseUrl || (import.meta.env.VITE_API_URL as string) || 'http://localhost:8080'
+    this.baseUrl = (baseUrl || (import.meta.env.VITE_API_URL as string) || '/').replace(/\/+$/, '')
   }
 
   private async request(path: string, opts: RequestInit = {}) {
