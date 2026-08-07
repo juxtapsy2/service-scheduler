@@ -13,6 +13,9 @@ import type { FieldDef } from './types'
 import { OptionsKey } from './types'
 import DynamicField from './components/DynamicField'
 
+import { toast, ToastContainer } from 'react-toastify'
+import 'react-toastify/dist/ReactToastify.css'
+
 type Props = {
   fields?: FieldDef[]
 }
@@ -40,7 +43,6 @@ export default function QuickBookingForm({ fields }: Props) {
   const [technicians, setTechnicians] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const formRef = useRef<any>(null)
   const suppressUntilRef = useRef<number>(0)
   const availSeqRef = useRef<number>(0)
@@ -163,12 +165,6 @@ export default function QuickBookingForm({ fields }: Props) {
   const [, setAvailLoading] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<Record<string,string | null>>({})
 
-  const [toast, setToast] = useState<{message: string, type: 'success' | 'danger'} | null>(null)
-  function showToast(message: string, type: 'success' | 'danger' = 'success') {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3500)
-  }
-
   // helper to run availability check (reads latest form from ref so WS-triggered checks use current values)
   const runAvailabilityCheck = async () => {
     // suppress availability checks briefly after a successful booking initiated from this client
@@ -243,7 +239,6 @@ export default function QuickBookingForm({ fields }: Props) {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    setError(null)
     setResult(null)
 
     // enforce validation on submit (inline hints are non-blocking)
@@ -254,7 +249,7 @@ export default function QuickBookingForm({ fields }: Props) {
     const invalid = useFields.find((f) => f.required && validateField(f.name, form[f.name]))
     if (invalid) {
       setFieldErrors(errors)
-      setError('Please fix the invalid fields before booking.')
+      toast.error('Please fix the invalid fields before booking.')
       return
     }
 
@@ -271,7 +266,7 @@ export default function QuickBookingForm({ fields }: Props) {
       }
       const resp = await createQuickBooking(payload)
       setResult(resp.appointment_id)
-      showToast('Booked: ' + resp.appointment_id, 'success')
+      toast.success('Booked: ' + resp.appointment_id)
       // suppress availability checks briefly to avoid the just-created appointment immediately flipping the UI
       suppressUntilRef.current = Date.now() + 1500
       // bump sequence to invalidate any in-flight availability responses
@@ -279,21 +274,23 @@ export default function QuickBookingForm({ fields }: Props) {
       setAvailability(null)
     } catch (err: any) {
       const msg = err?.message || String(err)
-      setError(msg)
-      showToast(msg, 'danger')
+      toast.error(msg)
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="container py-4 min-w-3xl md:min-w-5xl flex flex-col items-center justify-center">
+    <div className="container py-4 w-full min-h-screen max-w-xl md:max-w-3xl flex flex-col items-center justify-center">
       <form onSubmit={submit} className="form-card w-full">
-        <h2 className="form-title">Service Scheduler</h2>
+        <h2 className="form-title text-2xl">Service Scheduler</h2>
         <div className="row gx-3 gy-3">
           {useFields.map((f) => {
             const key = f.optionsKey
-            const options = key === OptionsKey.Dealerships ? dealerships : key === OptionsKey.Technicians ? technicians : key === OptionsKey.ServiceTypes ? serviceTypes : []
+            let options: any[] = []
+            if (key === OptionsKey.Dealerships) options = dealerships
+            else if (key === OptionsKey.Technicians) options = [{ id: '', first_name: 'Any', last_name: 'available' }, ...technicians]
+            else if (key === OptionsKey.ServiceTypes) options = [...serviceTypes, { id: '__other__', name: 'Other' }]
 
             return (
               <DynamicField
@@ -317,7 +314,7 @@ export default function QuickBookingForm({ fields }: Props) {
                   placeholder="Duration (minutes)"
                   value={form.other_duration_minutes ?? 30}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded form-control"
+                  className="w-full px-3 py-2 border rounded form-control text-sm text-gray-800"
                   type="number"
                   required
                 />
@@ -348,23 +345,12 @@ export default function QuickBookingForm({ fields }: Props) {
           )}
         </div>
 
-        <div className="d-flex justify-content-between align-items-center pt-4">
-          <button type="submit" disabled={loading} className="btn btn-primary rounded-md border-none shadow-sm">{loading ? 'Booking...' : 'Book'}</button>
-          <div>
-            {result && <span className="text-success">Booked: {result}</span>}
-            {error && <span className="text-danger ms-2">{error}</span>}
-          </div>
+        <div className="flex justify-end align-items-center pt-4 gap-3">
+          <button type="submit" disabled={loading} className="btn btn-primary rounded-md px-4 py-2 shadow-sm whitespace-nowrap">{loading ? 'Booking...' : 'Book'}</button>
         </div>
       </form>
 
-      {/* Toast area */}
-      <div aria-live="polite" aria-atomic="true" style={{ position: 'fixed', top: 20, right: 20, zIndex: 2000 }}>
-        {toast && (
-          <div className={`alert ${toast.type === 'success' ? 'alert-success' : 'alert-danger'}`} role="alert">
-            {toast.message}
-          </div>
-        )}
-      </div>
+      <ToastContainer position="top-right" autoClose={3500} />
     </div>
   )
 }

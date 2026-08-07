@@ -1,8 +1,9 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-/* Palette from https://colors.muz.li/palette/272643/ffffff/e3f6f5/bae8e8/2c698d */
+@theme {
+  --font-sans: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+}
+
 :root {
   --palette-900: #272643; /* deep */
   --palette-000: #ffffff; /* white */
@@ -12,7 +13,6 @@
 
   --text: #6b6375;
   --text-h: var(--palette-900);
-  --bg: var(--palette-100);
   --border: #e5e4e7;
   --code-bg: #f4f3ec;
   --accent: var(--palette-500);
@@ -21,23 +21,17 @@
   --shadow:
     rgba(0, 0, 0, 0.06) 0 10px 15px -3px, rgba(0, 0, 0, 0.03) 0 4px 6px -2px;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
-  font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
   color-scheme: light dark;
   color: var(--text);
-  background: var(--bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
+  --toastify-font-family: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
 }
 
 /* simple dark adjustments keep palette legible */
@@ -73,40 +67,28 @@
 
 body {
   margin: 0;
-  background: var(--bg);
 }
 
 h1,
 h2 {
-  font-family: var(--heading);
-  font-weight: 500;
   color: var(--text-h);
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
 p { margin: 0 }
 
 /* form styles to ensure labels are on left and inputs on right */
 /* minimal fallback; prefer Tailwind utilities for layout */
 .form-label { margin-bottom: 0; }
 .form-control, .form-select { width: 100%; }
+
+/* custom select arrow: hide native one and draw a chevron with padding from the edge */
+.form-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3e%3cpath d='M4 6l4 4 4-4' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem;
+}
 
 .form-card {
   background: var(--palette-000);
@@ -116,6 +98,10 @@ p { margin: 0 }
   border-radius: 8px;
   width: 100%;
   margin: 0 auto;
+  box-sizing: border-box;
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .btn-primary {
@@ -125,15 +111,9 @@ p { margin: 0 }
   font-weight: 600;
 }
 
-/* page background texture using palette colors */
-body {
-  background-image: radial-gradient(var(--palette-200) 1px, transparent 1px),
-                    radial-gradient(var(--palette-200) 1px, transparent 1px);
-  background-size: 50px 50px;
-}
 
 /* title styling */
-.form-card h2, .form-title { color: var(--palette-900); font-size: 28px; margin-bottom: 12px }
+.form-card h2, .form-title { color: var(--palette-900); margin-bottom: 12px }
 
 /* availability badges */
 .text-success { color: #0f5132 }
