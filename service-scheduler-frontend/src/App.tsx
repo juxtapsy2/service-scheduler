@@ -4,7 +4,7 @@ import background from './assets/car-garage.png'
 
 function App() {
   return (
-    <div className="relative min-h-screen w-full justify-items-center">
+    <div className="relative min-h-screen w-full justify-items-center px-4">
       <div
         className="fixed inset-0 -z-10 bg-cover bg-center opacity-30"
         style={{ backgroundImage: `url(${background})` }}
